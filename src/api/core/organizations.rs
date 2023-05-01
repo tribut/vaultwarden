@@ -57,6 +57,7 @@ pub fn routes() -> Vec<Route> {
         post_org_import,
         list_policies,
         list_policies_token,
+        list_policies_invited_user,
         get_policy,
         put_policy,
         get_organization_tax,
@@ -93,7 +94,8 @@ pub fn routes() -> Vec<Route> {
         put_reset_password_enrollment,
         get_reset_password_details,
         put_reset_password,
-        get_org_export
+        get_org_export,
+        get_auto_enroll_status,
     ]
 }
 
@@ -300,6 +302,13 @@ async fn get_user_collections(headers: Headers, mut conn: DbConn) -> Json<Value>
         "Object": "list",
         "ContinuationToken": null,
     }))
+}
+
+#[get("/organizations/<_identifier>/auto-enroll-status")]
+fn get_auto_enroll_status(_identifier: String) -> JsonResult {
+    Ok(Json(json!({
+        "ResetPasswordEnabled": false,
+    })))
 }
 
 #[get("/organizations/<org_id>/collections")]
@@ -803,7 +812,6 @@ async fn get_org_users(
         "ContinuationToken": null,
     }))
 }
-
 #[post("/organizations/<org_id>/keys", data = "<data>")]
 async fn post_org_keys(
     org_id: &str,
@@ -1634,6 +1642,25 @@ async fn list_policies_token(org_id: &str, token: &str, mut conn: DbConn) -> Jso
 
     // TODO: We receive the invite token as ?token=<>, validate it contains the org id
     let policies = OrgPolicy::find_by_org(org_id, &mut conn).await;
+    let policies_json: Vec<Value> = policies.iter().map(OrgPolicy::to_json).collect();
+
+    Ok(Json(json!({
+        "Data": policies_json,
+        "Object": "list",
+        "ContinuationToken": null
+    })))
+}
+
+#[allow(non_snake_case)]
+#[get("/organizations/<org_id>/policies/invited-user?<userId>")]
+async fn list_policies_invited_user(org_id: String, userId: String, mut conn: DbConn) -> JsonResult {
+    //We should confirm the user is part of the organization, but unique domain_hints must be supported first.
+
+    if userId.is_empty() {
+        err!("userId is empty.");
+    }
+
+    let policies = OrgPolicy::find_by_org(&org_id, &mut conn).await;
     let policies_json: Vec<Value> = policies.iter().map(OrgPolicy::to_json).collect();
 
     Ok(Json(json!({

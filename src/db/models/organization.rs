@@ -141,7 +141,7 @@ impl Organization {
     pub fn to_json(&self) -> Value {
         json!({
             "Id": self.uuid,
-            "Identifier": null, // not supported by us
+            "Identifier": null, // Not supported
             "Name": self.name,
             "Seats": 10, // The value doesn't matter, we don't check server-side
             // "MaxAutoscaleSeats": null, // The value doesn't matter, we don't check server-side
@@ -154,7 +154,7 @@ impl Organization {
             "UseTotp": true,
             "UsePolicies": true,
             // "UseScim": false, // Not supported (Not AGPLv3 Licensed)
-            "UseSso": false, // Not supported
+            "UseSso": CONFIG.sso_enabled(),
             // "UseKeyConnector": false, // Not supported
             "SelfHost": true,
             "UseApi": false, // Not supported
@@ -285,6 +285,15 @@ impl Organization {
         }}
     }
 
+    pub async fn find_by_identifier(_identifer: &str, conn: &DbConn) -> Option<Self> {
+        db_run! { conn: {
+            organizations::table
+                //.filter(organizations::identifer.eq(_identifer))
+                .first::<OrganizationDb>(conn)
+                .ok().from_db()
+        }}
+    }
+
     pub async fn get_all(conn: &mut DbConn) -> Vec<Self> {
         db_run! { conn: {
             organizations::table.load::<OrganizationDb>(conn).expect("Error loading organizations").from_db()
@@ -317,7 +326,7 @@ impl UserOrganization {
             "ResetPasswordEnrolled": self.reset_password_key.is_some(),
             "UseResetPassword": CONFIG.mail_enabled(),
             "SsoBound": false, // Not supported
-            "UseSso": false, // Not supported
+            "UseSso": CONFIG.sso_enabled(),
             "ProviderId": null,
             "ProviderName": null,
             // "KeyConnectorEnabled": false,
