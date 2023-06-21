@@ -16,7 +16,7 @@ use crate::{
         core::two_factor::{duo, email, email::EmailTokenData, yubikey},
         ApiResult, EmptyResult, JsonResult, JsonUpcase,
     },
-    auth::{generate_organization_api_key_login_claims,generate_ssotoken_claims, ClientHeaders, ClientIp},
+    auth::{generate_organization_api_key_login_claims, encode_jwt, generate_ssotoken_claims, ClientHeaders, ClientIp},
     db::{models::*, DbConn},
     error::MapResult,
     mail, util,
@@ -243,7 +243,7 @@ async fn _authorization_login(
                         "Kdf": user.client_kdf_type,
                         "KdfIterations": user.client_kdf_iter,
                         "KdfMemory": user.client_kdf_memory,
-                        "KdfParallelism": user.client_kdf_parallelism,
+                        "KdfParallelism": user.client_kdf_parallelism,+-*8
                         "ResetMasterPassword": user.password_hash.is_empty(),
                         // "forcePasswordReset": false,
                         // "keyConnectorUrl": false,
