@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use rmpv::Value;
 use rocket::{
     futures::{SinkExt, StreamExt},
@@ -21,7 +21,10 @@ use tokio_tungstenite::{
 
 use crate::{
     auth::ClientIp,
-    db::models::{Cipher, Folder, Send as DbSend, User},
+    db::{
+        models::{Cipher, Folder, Send as DbSend, User},
+        DbConn,
+    },
     Error, CONFIG,
 };
 
@@ -32,6 +35,8 @@ static WS_USERS: Lazy<Arc<WebSocketUsers>> = Lazy::new(|| {
         map: Arc::new(dashmap::DashMap::new()),
     })
 });
+
+use super::{push_cipher_update, push_folder_update, push_logout, push_send_update, push_user_update};
 
 pub fn routes() -> Vec<Route> {
     routes![websockets_hub]
@@ -233,19 +238,33 @@ impl WebSocketUsers {
         );
 
         self.send_update(&user.uuid, &data).await;
+
+        if CONFIG.push_enabled() {
+            push_user_update(ut, user);
+        }
     }
 
     pub async fn send_logout(&self, user: &User, acting_device_uuid: Option<String>) {
         let data = create_update(
             vec![("UserId".into(), user.uuid.clone().into()), ("Date".into(), serialize_date(user.updated_at))],
             UpdateType::LogOut,
-            acting_device_uuid,
+            acting_device_uuid.clone(),
         );
 
         self.send_update(&user.uuid, &data).await;
+
+        if CONFIG.push_enabled() {
+            push_logout(user, acting_device_uuid);
+        }
     }
 
-    pub async fn send_folder_update(&self, ut: UpdateType, folder: &Folder, acting_device_uuid: &String) {
+    pub async fn send_folder_update(
+        &self,
+        ut: UpdateType,
+        folder: &Folder,
+        acting_device_uuid: &String,
+        conn: &mut DbConn,
+    ) {
         let data = create_update(
             vec![
                 ("Id".into(), folder.uuid.clone().into()),
@@ -257,6 +276,10 @@ impl WebSocketUsers {
         );
 
         self.send_update(&folder.user_uuid, &data).await;
+
+        if CONFIG.push_enabled() {
+            push_folder_update(ut, folder, acting_device_uuid, conn).await;
+        }
     }
 
     pub async fn send_cipher_update(
@@ -265,17 +288,29 @@ impl WebSocketUsers {
         cipher: &Cipher,
         user_uuids: &[String],
         acting_device_uuid: &String,
+        collection_uuids: Option<Vec<String>>,
+        conn: &mut DbConn,
     ) {
-        let user_uuid = convert_option(cipher.user_uuid.clone());
         let org_uuid = convert_option(cipher.organization_uuid.clone());
+        // Depending if there are collections provided or not, we need to have different values for the following variables.
+        // The user_uuid should be `null`, and the revision date should be set to now, else the clients won't sync the collection change.
+        let (user_uuid, collection_uuids, revision_date) = if let Some(collection_uuids) = collection_uuids {
+            (
+                Value::Nil,
+                Value::Array(collection_uuids.into_iter().map(|v| v.into()).collect::<Vec<rmpv::Value>>()),
+                serialize_date(Utc::now().naive_utc()),
+            )
+        } else {
+            (convert_option(cipher.user_uuid.clone()), Value::Nil, serialize_date(cipher.updated_at))
+        };
 
         let data = create_update(
             vec![
                 ("Id".into(), cipher.uuid.clone().into()),
                 ("UserId".into(), user_uuid),
                 ("OrganizationId".into(), org_uuid),
-                ("CollectionIds".into(), Value::Nil),
-                ("RevisionDate".into(), serialize_date(cipher.updated_at)),
+                ("CollectionIds".into(), collection_uuids),
+                ("RevisionDate".into(), revision_date),
             ],
             ut,
             Some(acting_device_uuid.into()),
@@ -284,9 +319,20 @@ impl WebSocketUsers {
         for uuid in user_uuids {
             self.send_update(uuid, &data).await;
         }
+
+        if CONFIG.push_enabled() && user_uuids.len() == 1 {
+            push_cipher_update(ut, cipher, acting_device_uuid, conn).await;
+        }
     }
 
-    pub async fn send_send_update(&self, ut: UpdateType, send: &DbSend, user_uuids: &[String]) {
+    pub async fn send_send_update(
+        &self,
+        ut: UpdateType,
+        send: &DbSend,
+        user_uuids: &[String],
+        acting_device_uuid: &String,
+        conn: &mut DbConn,
+    ) {
         let user_uuid = convert_option(send.user_uuid.clone());
 
         let data = create_update(
@@ -301,6 +347,9 @@ impl WebSocketUsers {
 
         for uuid in user_uuids {
             self.send_update(uuid, &data).await;
+        }
+        if CONFIG.push_enabled() && user_uuids.len() == 1 {
+            push_send_update(ut, send, acting_device_uuid, conn).await;
         }
     }
 }
@@ -343,7 +392,7 @@ fn create_ping() -> Vec<u8> {
 }
 
 #[allow(dead_code)]
-#[derive(Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum UpdateType {
     SyncCipherUpdate = 0,
     SyncCipherCreate = 1,

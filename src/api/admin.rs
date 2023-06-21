@@ -13,7 +13,7 @@ use rocket::{
 };
 
 use crate::{
-    api::{core::log_event, ApiResult, EmptyResult, JsonResult, Notify, NumberOrString},
+    api::{core::log_event, unregister_push_device, ApiResult, EmptyResult, JsonResult, Notify, NumberOrString},
     auth::{decode_admin, encode_jwt, generate_admin_claims, ClientIp},
     config::ConfigBuilder,
     db::{backup_database, get_sql_server_version, models::*, DbConn, DbConnType},
@@ -36,6 +36,7 @@ pub fn routes() -> Vec<Route> {
         get_user_by_mail_json,
         post_admin_login,
         admin_page,
+        admin_page_login,
         invite_user,
         logout,
         delete_user,
@@ -256,6 +257,11 @@ fn admin_page(_token: AdminToken) -> ApiResult<Html<String>> {
     render_admin_page()
 }
 
+#[get("/", rank = 2)]
+fn admin_page_login() -> ApiResult<Html<String>> {
+    render_admin_login(None, None)
+}
+
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
 struct InviteData {
@@ -396,14 +402,22 @@ async fn delete_user(uuid: &str, token: AdminToken, mut conn: DbConn) -> EmptyRe
 #[post("/users/<uuid>/deauth")]
 async fn deauth_user(uuid: &str, _token: AdminToken, mut conn: DbConn, nt: Notify<'_>) -> EmptyResult {
     let mut user = get_user_or_404(uuid, &mut conn).await?;
-    Device::delete_all_by_user(&user.uuid, &mut conn).await?;
-    user.reset_security_stamp();
-
-    let save_result = user.save(&mut conn).await;
 
     nt.send_logout(&user, None).await;
 
-    save_result
+    if CONFIG.push_enabled() {
+        for device in Device::find_push_devices_by_user(&user.uuid, &mut conn).await {
+            match unregister_push_device(device.uuid).await {
+                Ok(r) => r,
+                Err(e) => error!("Unable to unregister devices from Bitwarden server: {}", e),
+            };
+        }
+    }
+
+    Device::delete_all_by_user(&user.uuid, &mut conn).await?;
+    user.reset_security_stamp();
+
+    user.save(&mut conn).await
 }
 
 #[post("/users/<uuid>/disable")]
@@ -761,7 +775,17 @@ impl<'r> FromRequest<'r> for AdminToken {
 
             let access_token = match cookies.get(COOKIE_NAME) {
                 Some(cookie) => cookie.value(),
-                None => return Outcome::Failure((Status::Unauthorized, "Unauthorized")),
+                None => {
+                    let requested_page =
+                        request.segments::<std::path::PathBuf>(0..).unwrap_or_default().display().to_string();
+                    // When the requested page is empty, it is `/admin`, in that case, Forward, so it will render the login page
+                    // Else, return a 401 failure, which will be caught
+                    if requested_page.is_empty() {
+                        return Outcome::Forward(Status::Unauthorized);
+                    } else {
+                        return Outcome::Failure((Status::Unauthorized, "Unauthorized"));
+                    }
+                }
             };
 
             if decode_admin(access_token).is_err() {
