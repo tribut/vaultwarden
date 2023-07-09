@@ -682,7 +682,7 @@ async fn download_icon(domain: &str) -> Result<(Bytes, Option<&str>), Error> {
 
     for icon in icon_result.iconlist.iter().take(5) {
         if icon.href.starts_with("data:image") {
-            let datauri = DataUrl::process(&icon.href).unwrap();
+            let Ok(datauri) = DataUrl::process(&icon.href) else {continue};
             // Check if we are able to decode the data uri
             let mut body = BytesMut::new();
             match datauri.decode::<_, ()>(|bytes| {
@@ -891,6 +891,7 @@ impl Emitter for FaviconEmitter {
             FaviconToken::EndTag(ref mut tag) => {
                 // Always clean seen attributes
                 self.seen_attributes.clear();
+                self.set_last_start_tag(None);
 
                 // Only trigger an emit for the </head> tag.
                 // This is matched, and will break the for-loop.
