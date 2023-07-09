@@ -897,7 +897,7 @@ struct SecretVerificationRequest {
 }
 
 #[post("/accounts/verify-password", data = "<data>")]
-fn verify_password(data: JsonUpcase<SecretVerificationRequest>, headers: Headers) -> EmptyResult {
+fn verify_password(data: JsonUpcase<SecretVerificationRequest>, headers: Headers) -> JsonResult {
     let data: SecretVerificationRequest = data.into_inner().data;
     let user = headers.user;
 
@@ -905,7 +905,9 @@ fn verify_password(data: JsonUpcase<SecretVerificationRequest>, headers: Headers
         err!("Invalid password")
     }
 
-    Ok(())
+    Ok(Json(json!({
+      "MasterPasswordPolicy": {},
+    })))
 }
 
 async fn _api_key(
