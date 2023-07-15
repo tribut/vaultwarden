@@ -729,7 +729,6 @@ async fn post_verify_email_token(data: JsonUpcase<VerifyEmailTokenData>, mut con
         Ok(claims) => claims,
         Err(_) => err!("Invalid claim"),
     };
-
     if claims.sub != user.uuid {
         err!("Invalid claim");
     }
@@ -912,7 +911,7 @@ fn verify_password(data: JsonUpcase<SecretVerificationRequest>, headers: Headers
     }
 
     Ok(Json(json!({
-      "MasterPasswordPolicy": {},
+      "MasterPasswordPolicy": {}, // Required for SSO login with mobile apps
     })))
 }
 

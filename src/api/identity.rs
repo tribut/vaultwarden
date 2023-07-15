@@ -127,6 +127,7 @@ async fn _refresh_login(data: ConnectData, conn: &mut DbConn) -> JsonResult {
         "refresh_token": device.refresh_token,
         "Key": user.akey,
         "PrivateKey": user.private_key,
+
         "Kdf": user.client_kdf_type,
         "KdfIterations": user.client_kdf_iter,
         "KdfMemory": user.client_kdf_memory,
@@ -158,6 +159,7 @@ async fn _authorization_login(
     }
 
     let scope_vec = vec!["api".into(), "offline_access".into()];
+    // XXX clean up unwrap
     let code = data.code.as_ref().unwrap();
 
     let (refresh_token, id_token, userinfo) = match get_auth_code_access_token(code).await {
@@ -166,12 +168,14 @@ async fn _authorization_login(
     };
 
     let mut validation = jsonwebtoken::Validation::default();
+    // XXX do we need validation??
     validation.insecure_disable_signature_validation();
 
     let token = jsonwebtoken::decode::<TokenPayload>(id_token.as_str(), &DecodingKey::from_secret(&[]), &validation)
         .unwrap()
         .claims;
 
+    // XXX check expiry?
     // let expiry = token.exp;
     let nonce = token.nonce;
     let mut new_user = false;
@@ -183,6 +187,7 @@ async fn _authorization_login(
                     // let expiry = token.exp;
                     let user_email = match token.email {
                         Some(email) => email,
+                        // XXX clean up unwrap
                         None => userinfo.email().unwrap().to_owned().to_string(),
                     };
                     let now = Utc::now().naive_utc();
@@ -245,8 +250,6 @@ async fn _authorization_login(
                         "KdfMemory": user.client_kdf_memory,
                         "KdfParallelism": user.client_kdf_parallelism,
                         "ResetMasterPassword": user.password_hash.is_empty(),
-                        // "forcePasswordReset": false,
-                        // "keyConnectorUrl": false,
                         "scope": scope,
                         "unofficialServer": true,
                     });

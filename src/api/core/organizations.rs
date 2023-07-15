@@ -309,7 +309,7 @@ async fn get_user_collections(headers: Headers, mut conn: DbConn) -> Json<Value>
 #[get("/organizations/<_identifier>/auto-enroll-status")]
 fn get_auto_enroll_status(_identifier: String) -> JsonResult {
     Ok(Json(json!({
-        "ResetPasswordEnabled": false, //Not Implemented.
+        "ResetPasswordEnabled": false, // Not implemented
     })))
 }
 
@@ -1672,7 +1672,7 @@ async fn list_policies_token(org_id: &str, token: &str, mut conn: DbConn) -> Jso
 #[allow(non_snake_case)]
 #[get("/organizations/<org_id>/policies/invited-user?<userId>")]
 async fn list_policies_invited_user(org_id: String, userId: String, mut conn: DbConn) -> JsonResult {
-    //We should confirm the user is part of the organization, but unique domain_hints must be supported first.
+    // We should confirm the user is part of the organization, but unique domain_hints must be supported first.
 
     if userId.is_empty() {
         err!("userId is empty.");
