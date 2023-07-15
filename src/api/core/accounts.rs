@@ -256,7 +256,7 @@ async fn post_set_password(data: JsonUpcase<SetPasswordData>, headers: Headers, 
         user.client_kdf_type = client_kdf_type;
     }
 
-    //We need to allow revision-date to use the old security_timestamp
+    // We need to allow revision-date to use the old security_timestamp
     let routes = vec!["revision_date"];
     let routes: Option<Vec<String>> = Some(routes.iter().map(ToString::to_string).collect());
 
