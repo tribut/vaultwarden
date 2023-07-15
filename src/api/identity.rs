@@ -844,11 +844,10 @@ async fn prevalidate(domainHint: String, conn: DbConn) -> JsonResult {
 }
 
 use openidconnect::core::{CoreClient, CoreProviderMetadata, CoreResponseType, CoreUserInfoClaims};
-use openidconnect::reqwest::async_http_client;
-use openidconnect::reqwest::http_client;
-use openidconnect::OAuth2TokenResponse;
+use openidconnect::reqwest::{async_http_client, http_client};
 use openidconnect::{
-    AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, RedirectUrl, Scope,
+    AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse,
+    RedirectUrl, Scope,
 };
 
 async fn get_client_from_sso_config() -> Result<CoreClient, &'static str> {
