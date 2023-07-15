@@ -162,9 +162,9 @@ async fn _authorization_login(
     // XXX clean up unwrap
     let code = data.code.as_ref().unwrap();
 
-    let (refresh_token, id_token, userinfo) = match get_auth_code_access_token(code).await {
-        Ok((refresh_token, id_token, userinfo)) => (refresh_token, id_token, userinfo),
-        Err(err) => err!(err),
+    let (refresh_token, id_token, user_info) = match get_auth_code_access_token(code).await {
+        Ok((refresh_token, id_token, user_info)) => (refresh_token, id_token, user_info),
+        Err(_err) => err!("Could not retrieve access token"),
     };
 
     let mut validation = jsonwebtoken::Validation::default();
@@ -188,7 +188,7 @@ async fn _authorization_login(
                     let user_email = match token.email {
                         Some(email) => email,
                         // XXX clean up unwrap
-                        None => userinfo.email().unwrap().to_owned().to_string(),
+                        None => user_info.email().unwrap().to_owned().to_string(),
                     };
                     let now = Utc::now().naive_utc();
 
@@ -844,29 +844,34 @@ async fn prevalidate(domainHint: String, conn: DbConn) -> JsonResult {
 }
 
 use openidconnect::core::{CoreClient, CoreProviderMetadata, CoreResponseType, CoreUserInfoClaims};
-use openidconnect::reqwest::{async_http_client, http_client};
+use openidconnect::reqwest::async_http_client;
 use openidconnect::{
     AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse,
     RedirectUrl, Scope,
 };
 
-async fn get_client_from_sso_config() -> Result<CoreClient, &'static str> {
+async fn get_client_from_sso_config() -> ApiResult<CoreClient> {
     let redirect = CONFIG.sso_callback_path();
     let client_id = ClientId::new(CONFIG.sso_client_id());
     let client_secret = ClientSecret::new(CONFIG.sso_client_secret());
-    let issuer_url = IssuerUrl::new(CONFIG.sso_authority()).or(Err("invalid issuer URL"))?;
+    let issuer_url = match IssuerUrl::new(CONFIG.sso_authority()) {
+        Ok(issuer) => issuer,
+        Err(_err) => err!("invalid issuer URL"),
+    };
 
-    //TODO: This comparison will fail if one URI has a trailing slash and the other one does not.
-    // Should we remove trailing slashes when saving? Or when checking?
     let provider_metadata = match CoreProviderMetadata::discover_async(issuer_url, async_http_client).await {
         Ok(metadata) => metadata,
         Err(_err) => {
-            return Err("Failed to discover OpenID provider");
+            err!("Failed to discover OpenID provider")
         }
     };
 
+    let redirect_uri = match RedirectUrl::new(redirect) {
+        Ok(uri) => uri,
+        Err(err) => err!("Invalid redirection url: {}", err.to_string()),
+    };
     let client = CoreClient::from_provider_metadata(provider_metadata, client_id, Some(client_secret))
-        .set_redirect_uri(RedirectUrl::new(redirect).or(Err("Invalid redirect URL"))?);
+        .set_redirect_uri(redirect_uri);
 
     Ok(client)
 }
@@ -953,32 +958,34 @@ async fn authorize(data: AuthorizeData, jar: &CookieJar<'_>, mut conn: DbConn) -
 
             Ok(redirect)
         }
-        Err(err) => err!("Unable to find client from identifier {}", err),
+        Err(_err) => err!("Unable to find client from identifier"),
     }
 }
 
-async fn get_auth_code_access_token(code: &str) -> Result<(String, String, CoreUserInfoClaims), &'static str> {
+async fn get_auth_code_access_token(code: &str) -> ApiResult<(String, String, CoreUserInfoClaims)> {
     let oidc_code = AuthorizationCode::new(String::from(code));
     match get_client_from_sso_config().await {
-        Ok(client) => match client.exchange_code(oidc_code).request_async(async_http_client).await {
-            Ok(token_response) => {
-                //let refresh_token = token_response.refresh_token():
-                let refreshtoken = match token_response.refresh_token() {
-                    Some(token) => token.secret().to_string(),
-                    None => String::new(),
-                };
-                let id_token = token_response.extra_fields().id_token().unwrap().to_string();
+        Ok(client) => {
+            match client.exchange_code(oidc_code).request_async(async_http_client).await {
+                Ok(token_response) => {
+                    let refresh_token = match token_response.refresh_token() {
+                        Some(token) => token.secret().to_string(),
+                        None => String::new(),
+                    };
+                    let id_token = token_response.extra_fields().id_token().unwrap().to_string();
 
-                let userinfo: CoreUserInfoClaims = client
-                    .user_info(token_response.access_token().to_owned(), None)
-                    .unwrap()
-                    .request(http_client)
-                    .unwrap();
+                    let user_info: CoreUserInfoClaims = client
+                        .user_info(token_response.access_token().to_owned(), None)
+                        .unwrap()
+                        .request_async(async_http_client)
+                        .await
+                        .unwrap();
 
-                Ok((refreshtoken, id_token, userinfo))
+                    Ok((refresh_token, id_token, user_info))
+                }
+                Err(err) => err!("Failed to contact token endpoint: {}", err.to_string()),
             }
-            Err(_err) => Err("Failed to contact token endpoint"),
-        },
-        Err(_err) => Err("unable to find client"),
+        }
+        Err(_err) => err!("Unable to find client"),
     }
 }
