@@ -40,6 +40,7 @@ pub fn routes() -> Vec<Route> {
         post_organization_collection_delete,
         bulk_delete_organization_collections,
         get_org_details,
+        get_org_domain_sso_details,
         get_org_users,
         send_invite,
         reinvite_user,
@@ -788,6 +789,14 @@ async fn _get_org_details(org_id: &str, host: &str, user_uuid: &str, conn: &mut 
             .push(c.to_json(host, user_uuid, Some(&cipher_sync_data), CipherSyncType::Organization, conn).await);
     }
     json!(ciphers_json)
+}
+
+#[post("/organizations/domain/sso/details")]
+fn get_org_domain_sso_details() -> JsonResult {
+    Ok(Json(json!({
+        "organizationIdentifier": "vaultwarden",
+        "ssoAvailable": CONFIG.sso_enabled()
+    })))
 }
 
 #[derive(FromForm)]
