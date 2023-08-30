@@ -44,7 +44,7 @@ impl Fairing for AppHeaders {
         // Do not send the Content-Security-Policy (CSP) Header and X-Frame-Options for the *-connector.html files.
         // This can cause issues when some MFA requests needs to open a popup or page within the clients like WebAuthn, or Duo.
         // This is the same behaviour as upstream Bitwarden.
-        if !req_uri_path.contains("connector.html") {
+        if !req_uri_path.ends_with("connector.html") {
             // # Frame Ancestors:
             // Chrome Web Store: https://chrome.google.com/webstore/detail/bitwarden-free-password-m/nngceckbapebfimnlniiiahkandclblb
             // Edge Add-ons: https://microsoftedge.microsoft.com/addons/detail/bitwarden-free-password/jbkfoedolllekgbhcbcoahefnbanhhlh?hl=en-US
