@@ -1684,7 +1684,7 @@ async fn list_policies_invited_user(org_id: String, userId: String, mut conn: Db
     // We should confirm the user is part of the organization, but unique domain_hints must be supported first.
 
     if userId.is_empty() {
-        err!("userId is empty.");
+        err!("userId must not be empty");
     }
 
     let policies = OrgPolicy::find_by_org(&org_id, &mut conn).await;

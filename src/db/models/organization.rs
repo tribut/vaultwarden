@@ -153,7 +153,7 @@ impl Organization {
     pub fn to_json(&self) -> Value {
         json!({
             "Id": self.uuid,
-            "Identifier": null, // Not supported
+            "Identifier": null, // not supported by us
             "Name": self.name,
             "Seats": 10, // The value doesn't matter, we don't check server-side
             // "MaxAutoscaleSeats": null, // The value doesn't matter, we don't check server-side
