@@ -968,27 +968,25 @@ async fn authorize(data: AuthorizeData, jar: &CookieJar<'_>, mut conn: DbConn) -
 async fn get_auth_code_access_token(code: &str) -> ApiResult<(String, String, CoreUserInfoClaims)> {
     let oidc_code = AuthorizationCode::new(String::from(code));
     match get_client_from_sso_config().await {
-        Ok(client) => {
-            match client.exchange_code(oidc_code).request_async(async_http_client).await {
-                Ok(token_response) => {
-                    let refresh_token = match token_response.refresh_token() {
-                        Some(token) => token.secret().to_string(),
-                        None => String::new(),
-                    };
-                    let id_token = token_response.extra_fields().id_token().unwrap().to_string();
+        Ok(client) => match client.exchange_code(oidc_code).request_async(async_http_client).await {
+            Ok(token_response) => {
+                let refresh_token = match token_response.refresh_token() {
+                    Some(token) => token.secret().to_string(),
+                    None => String::new(),
+                };
+                let id_token = token_response.extra_fields().id_token().unwrap().to_string();
 
-                    let user_info: CoreUserInfoClaims = client
-                        .user_info(token_response.access_token().to_owned(), None)
-                        .unwrap()
-                        .request_async(async_http_client)
-                        .await
-                        .unwrap();
+                let user_info: CoreUserInfoClaims = client
+                    .user_info(token_response.access_token().to_owned(), None)
+                    .unwrap()
+                    .request_async(async_http_client)
+                    .await
+                    .unwrap();
 
-                    Ok((refresh_token, id_token, user_info))
-                }
-                Err(err) => err!("Failed to contact token endpoint: {}", err.to_string()),
+                Ok((refresh_token, id_token, user_info))
             }
-        }
+            Err(err) => err!("Failed to contact token endpoint: {}", err.to_string()),
+        },
         Err(_err) => err!("Unable to find client"),
     }
 }
