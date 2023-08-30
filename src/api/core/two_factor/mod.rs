@@ -220,14 +220,14 @@ fn get_device_verification_settings(_headers: Headers, _conn: DbConn) -> Json<Va
     }))
 }
 
-// 2FA is broken with SSO, if password login is disabled prevent activation.
+// 2FA is broken with SSO, prevent activation if password login is disabled
 fn authenticator_activation_check(user: &User, password_hash: &str) -> EmptyResult {
     if !user.check_valid_password(password_hash) {
         err!("Invalid password");
     }
 
     if CONFIG.sso_enabled() && CONFIG.sso_only() {
-        err!("Impossible to activate 2FA when SSO is the only login solution");
+        err!("Cannot activate 2FA when SSO is the only login option");
     }
 
     Ok(())

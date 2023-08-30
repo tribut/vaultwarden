@@ -621,7 +621,7 @@ async fn twofactor_auth(
                 if CONFIG.sso_only() {
                     err!("2FA not supported with SSO login, contact your administrator");
                 } else {
-                    err!("2FA not supported with SSO login, log directly using email/Master Password");
+                    err!("2FA not supported with SSO login, log in directly using email and master password");
                 }
             } else {
                 err_json!(_json_err_twofactor(&twofactor_ids, user_uuid, conn).await?, "2FA token not provided");
