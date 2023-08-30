@@ -257,7 +257,7 @@ impl<'r> rocket::response::Responder<'r, 'static> for CustomRedirect {
             .header(ContentType::HTML)
             .finalize();
 
-        //Normal headers
+        // Normal headers
         response.set_raw_header("Referrer-Policy", "same-origin");
         response.set_raw_header("X-XSS-Protection", "0");
 

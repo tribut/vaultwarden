@@ -153,14 +153,19 @@ async fn _authorization_login(
     conn: &mut DbConn,
     ip: &ClientIp,
 ) -> JsonResult {
-    let scope = data.scope.as_ref().unwrap();
+    let scope = match data.scope.as_ref() {
+        None => err!("Got no scope in OIDC data"),
+        Some(scope) => scope,
+    };
     if scope != "api offline_access" {
         err!("Scope not supported")
     }
 
     let scope_vec = vec!["api".into(), "offline_access".into()];
-    // XXX clean up unwrap
-    let code = data.code.as_ref().unwrap();
+    let code = match data.code.as_ref() {
+        None => err!("Got no code in OIDC data"),
+        Some(code) => code,
+    };
 
     let (refresh_token, id_token, user_info) = match get_auth_code_access_token(code).await {
         Ok((refresh_token, id_token, user_info)) => (refresh_token, id_token, user_info),
@@ -168,14 +173,13 @@ async fn _authorization_login(
     };
 
     let mut validation = jsonwebtoken::Validation::default();
-    // XXX do we need validation??
     validation.insecure_disable_signature_validation();
 
-    let token = jsonwebtoken::decode::<TokenPayload>(id_token.as_str(), &DecodingKey::from_secret(&[]), &validation)
-        .unwrap()
-        .claims;
+    let token = match jsonwebtoken::decode::<TokenPayload>(id_token.as_str(), &DecodingKey::from_secret(&[]), &validation) {
+        Err(_err) => err!("Could not decode id token"),
+        Ok(payload) => payload.claims,
+    };
 
-    // XXX check expiry?
     // let expiry = token.exp;
     let nonce = token.nonce;
     let mut new_user = false;
@@ -186,8 +190,10 @@ async fn _authorization_login(
                 Ok(_) => {
                     let user_email = match token.email {
                         Some(email) => email,
-                        // XXX clean up unwrap
-                        None => user_info.email().unwrap().to_owned().to_string(),
+                        None => match user_info.email() {
+                            None => err!("Neither id token nor userinfo contained an email"),
+                            Some(email) => email.to_owned().to_string(),
+                        },
                     };
                     let now = Utc::now().naive_utc();
 
@@ -883,8 +889,14 @@ async fn get_client_from_sso_config() -> ApiResult<CoreClient> {
 fn oidcsignin(code: String, jar: &CookieJar<'_>, _conn: DbConn) -> ApiResult<CustomRedirect> {
     let cookiemanager = CookieManager::new(jar);
 
-    let redirect_uri = cookiemanager.get_cookie("redirect_uri".to_string()).unwrap();
-    let orig_state = cookiemanager.get_cookie("state".to_string()).unwrap();
+    let redirect_uri = match cookiemanager.get_cookie("redirect_uri".to_string()) {
+        None => err!("No redirect_uri in cookie"),
+        Some(uri) => uri,
+    };
+    let orig_state = match cookiemanager.get_cookie("state".to_string()) {
+            None => err!("No state in cookie"),
+            Some(state) => state,
+    };
 
     cookiemanager.delete_cookie("redirect_uri".to_string());
     cookiemanager.delete_cookie("state".to_string());
@@ -951,8 +963,16 @@ async fn authorize(data: AuthorizeData, jar: &CookieJar<'_>, mut conn: DbConn) -
             let sso_nonce = SsoNonce::new(nonce.secret().to_string());
             sso_nonce.save(&mut conn).await?;
 
-            cookiemanager.set_cookie("redirect_uri".to_string(), data.redirect_uri.unwrap());
-            cookiemanager.set_cookie("state".to_string(), data.state.unwrap());
+            let redirect_uri = match data.redirect_uri {
+                None => err!("No redirect_uri in data"),
+                Some(uri) => uri,
+            };
+            cookiemanager.set_cookie("redirect_uri".to_string(), redirect_uri);
+            let state = match data.state {
+                None => err!("No state in data"),
+                Some(state) => state,
+            };
+            cookiemanager.set_cookie("state".to_string(), state);
 
             let redirect = CustomRedirect {
                 url: format!("{}", auth_url),
@@ -974,14 +994,20 @@ async fn get_auth_code_access_token(code: &str) -> ApiResult<(String, String, Co
                     Some(token) => token.secret().to_string(),
                     None => String::new(),
                 };
-                let id_token = token_response.extra_fields().id_token().unwrap().to_string();
+                let id_token = match token_response.extra_fields().id_token() {
+                    None => err!("Token response did not contain an id_token"),
+                    Some(token) => token.to_string(),
+                };
 
-                let user_info: CoreUserInfoClaims = client
-                    .user_info(token_response.access_token().to_owned(), None)
-                    .unwrap()
-                    .request_async(async_http_client)
-                    .await
-                    .unwrap();
+                let user_info: CoreUserInfoClaims = match client
+                    .user_info(token_response.access_token().to_owned(), None) {
+                        Err(_err) => err!("Token response did not contain user_info"),
+                        Ok(info) => match info.request_async(async_http_client)
+                        .await {
+                            Err(_err) => err!("Request to user_info endpoint failed"),
+                            Ok(claim) => claim,
+                        },
+                    };
 
                 Ok((refresh_token, id_token, user_info))
             }
