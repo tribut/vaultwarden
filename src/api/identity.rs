@@ -175,10 +175,11 @@ async fn _authorization_login(
     let mut validation = jsonwebtoken::Validation::default();
     validation.insecure_disable_signature_validation();
 
-    let token = match jsonwebtoken::decode::<TokenPayload>(id_token.as_str(), &DecodingKey::from_secret(&[]), &validation) {
-        Err(_err) => err!("Could not decode id token"),
-        Ok(payload) => payload.claims,
-    };
+    let token =
+        match jsonwebtoken::decode::<TokenPayload>(id_token.as_str(), &DecodingKey::from_secret(&[]), &validation) {
+            Err(_err) => err!("Could not decode id token"),
+            Ok(payload) => payload.claims,
+        };
 
     // let expiry = token.exp;
     let nonce = token.nonce;
@@ -844,7 +845,7 @@ fn _check_is_some<T>(value: &Option<T>, msg: &str) -> EmptyResult {
 
 #[get("/account/prevalidate")]
 #[allow(non_snake_case)]
-async fn prevalidate() -> JsonResult {
+fn prevalidate() -> JsonResult {
     let claims = generate_ssotoken_claims();
     let ssotoken = encode_jwt(&claims);
     Ok(Json(json!({
@@ -894,8 +895,8 @@ fn oidcsignin(code: String, jar: &CookieJar<'_>, _conn: DbConn) -> ApiResult<Cus
         Some(uri) => uri,
     };
     let orig_state = match cookiemanager.get_cookie("state".to_string()) {
-            None => err!("No state in cookie"),
-            Some(state) => state,
+        None => err!("No state in cookie"),
+        Some(state) => state,
     };
 
     cookiemanager.delete_cookie("redirect_uri".to_string());
@@ -999,11 +1000,10 @@ async fn get_auth_code_access_token(code: &str) -> ApiResult<(String, String, Co
                     Some(token) => token.to_string(),
                 };
 
-                let user_info: CoreUserInfoClaims = match client
-                    .user_info(token_response.access_token().to_owned(), None) {
+                let user_info: CoreUserInfoClaims =
+                    match client.user_info(token_response.access_token().to_owned(), None) {
                         Err(_err) => err!("Token response did not contain user_info"),
-                        Ok(info) => match info.request_async(async_http_client)
-                        .await {
+                        Ok(info) => match info.request_async(async_http_client).await {
                             Err(_err) => err!("Request to user_info endpoint failed"),
                             Ok(claim) => claim,
                         },
