@@ -224,6 +224,7 @@ table! {
         uuid -> Text,
         user_uuid -> Text,
         org_uuid -> Text,
+        invited_by_email -> Nullable<Text>,
         access_all -> Bool,
         akey -> Text,
         status -> Integer,
@@ -244,8 +245,11 @@ table! {
 }
 
 table! {
-    sso_nonce (nonce) {
+    sso_nonce (state) {
+        state -> Text,
         nonce -> Text,
+        redirect_uri -> Text,
+        created_at -> Timestamp,
     }
 }
 
