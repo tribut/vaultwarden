@@ -230,12 +230,8 @@ async fn _sso_login(data: ConnectData, user_uuid: &mut Option<String>, conn: &mu
             if user.email != user_infos.email {
                 if CONFIG.mail_enabled() {
                     mail::send_sso_change_email(&user_infos.email).await?;
-                } else {
-                    info!(
-                        "User {} email changed in SSO provider from {} to {}",
-                        user.uuid, user.email, user_infos.email
-                    );
                 }
+                info!("User {} email changed in SSO provider from {} to {}", user.uuid, user.email, user_infos.email);
             }
             (user, device, new_device, twofactor_token, sso_user)
         }
