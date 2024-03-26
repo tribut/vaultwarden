@@ -367,7 +367,8 @@ pub async fn exchange_code(wrapped_code: &str, conn: &mut DbConn) -> ApiResult<U
                     None => err!("Neither id token nor userinfo contained an email"),
                     Some(email) => email.to_owned().to_string(),
                 },
-            };
+            }
+            .to_lowercase();
 
             let user_name = user_info.preferred_username().map(|un| un.to_string());
 
