@@ -227,7 +227,7 @@ async fn _sso_login(data: ConnectData, user_uuid: &mut Option<String>, conn: &mu
             (user, device, new_device, twofactor_token, sso_user)
         }
         Some((user, device, new_device, twofactor_token, sso_user)) => {
-            if user.email != user_infos.email {
+            if user.email.to_lowercase() != user_infos.email.to_lowercase() {
                 if CONFIG.mail_enabled() {
                     mail::send_sso_change_email(&user_infos.email).await?;
                 }
