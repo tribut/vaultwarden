@@ -49,6 +49,12 @@ export default defineConfig({
             use: { ...devices['Desktop Firefox'] },
         },
         {
+            name: 'mariadb',
+            testMatch: 'tests/*.spec.ts',
+            testIgnore: 'tests/sso_*.spec.ts',
+            use: { ...devices['Desktop Firefox'] },
+        },
+        {
             name: 'mysql',
             testMatch: 'tests/*.spec.ts',
             testIgnore: 'tests/sso_*.spec.ts',
@@ -67,6 +73,12 @@ export default defineConfig({
         },
         {
             name: 'sso-postgres',
+            testMatch: 'tests/sso_*.spec.ts',
+            dependencies: ['sso-setup'],
+            teardown: 'sso-teardown',
+        },
+        {
+            name: 'sso-mariadb',
             testMatch: 'tests/sso_*.spec.ts',
             dependencies: ['sso-setup'],
             teardown: 'sso-teardown',
